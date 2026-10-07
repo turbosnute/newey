@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Newey",
+  "version": "1.0.0",
+  "description": "A modular, MagicMirror-like dashboard for every new tab.",
+  "chrome_url_overrides": { "newtab": "newtab.html" },
+  "permissions": ["storage", "geolocation"],
+  "host_permissions": [
+    "https://www.gstatic.com/prettyearth/*",
+    "https://api.met.no/*",
+    "https://geocoding-api.open-meteo.com/*",
+    "https://www.bing.com/*"
+  ],
+  "background": { "service_worker": "js/bg-proxy.js", "type": "module" },
+  "icons": { "128": "icon128.png" }
+}

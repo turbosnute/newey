@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>New tab</title>
+  <link rel="icon" href="icon128.png" />
+  <link rel="stylesheet" href="css/dashboard.css" />
+</head>
+<body>
+  <!-- Background layers: the provider's image is painted on the "back" layer
+       and faded in by flipping data-front between a/b. -->
+  <div id="background" aria-hidden="true">
+    <div id="background-a" class="background-layer"></div>
+    <div id="background-b" class="background-layer"></div>
+    <div id="background-vignette"></div>
+  </div>
+
+  <!-- Bottom-right info about the current background image. -->
+  <footer id="background-credit" class="hidden"></footer>
+
+  <!-- The module grid. -->
+  <main id="dashboard"></main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Node
+node_modules/
+npm-debug.log*
+*.log
+
+# Playwright MCP test artifacts (screenshots, traces)
+.playwright-mcp/
+
+# OS noise
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp
