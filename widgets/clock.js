@@ -12,6 +12,7 @@ class DigitalClock extends BaseWidget {
   static defaultHeight = 2;
   static defaultConfig = {
     fontSize: 'xl',      // lg | xl | xxl
+    align: 'center',     // left | center
     seconds: false,
     hour12: false,
     showDate: true,
@@ -20,6 +21,9 @@ class DigitalClock extends BaseWidget {
   static configSchema = [
     { key: 'fontSize', label: 'Font size', type: 'select', options: [
       { value: 'lg', label: 'Large' }, { value: 'xl', label: 'Extra large' }, { value: 'xxl', label: 'Colossal' },
+    ] },
+    { key: 'align', label: 'Alignment', type: 'select', options: [
+      { value: 'center', label: 'Centered' }, { value: 'left', label: 'Left' },
     ] },
     { key: 'seconds', label: 'Show seconds', type: 'checkbox' },
     { key: 'hour12', label: '12-hour clock', type: 'checkbox' },
@@ -46,7 +50,9 @@ class DigitalClock extends BaseWidget {
       hour12: !!this.config.hour12,
     });
 
-    let html = `<div class="clock-time clock-time--${this.config.fontSize || 'xl'}" aria-label="Current time">${timeFormat.format(now)}</div>`;
+    const align = this.config.align === 'left' ? 'left' : 'center';
+    let html = `<div class="clock clock--${align}">` +
+      `<div class="clock-time clock-time--${this.config.fontSize || 'xl'}" aria-label="Current time">${timeFormat.format(now)}</div>`;
 
     if (this.config.showDate) {
       const options =
@@ -56,6 +62,7 @@ class DigitalClock extends BaseWidget {
       html += `<div class="clock-date" aria-label="Current date">${new Intl.DateTimeFormat(undefined, options).format(now)}</div>`;
     }
 
+    html += '</div>';
     this.setBody(html);
   }
 

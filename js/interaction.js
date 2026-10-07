@@ -3,7 +3,9 @@
  *
  * - drag anywhere on a card (except interactive elements) to move it; it
  *   follows the cursor and snaps to the grid on release
- * - drag the bottom-right grip to change the card's width in columns
+ * - drag the bottom-right grip to change the card's size: horizontal for
+ *   width (columns), vertical for height (rows — auto-fit is suspended)
+ * - Shift+wheel resizes width; Alt+Shift+wheel resizes height
  */
 
 import { MAX_COLUMNS } from './grid.js';
@@ -18,7 +20,16 @@ export function makeInteractive({ card, getItem, grid, manager }) {
   card.addEventListener('wheel', (e) => {
     if (!e.shiftKey) return; // Shift+wheel resizes; plain scroll never hijacked
     e.preventDefault();
-    grid.resizeWidget(id, e.deltaY < 0 ? 1 : -1);
+    const item = getItem();
+    if (e.altKey) {
+      // Alt+Shift+wheel: height in rows (pins it); Ctrl drops back to snug
+      if (e.ctrlKey) { grid.setAutoHeight(id); return; }
+      const shown = grid.effHeightUnits(id) ?? item.height ?? 1;
+      const next = Math.max(1, shown + (e.deltaY < 0 ? 1 : -1));
+      if (next !== shown || item.autoHeight === false) grid.resizeWidgetHeight(id, next);
+    } else {
+      grid.resizeWidget(id, e.deltaY < 0 ? 1 : -1);
+    }
   }, { passive: false });
 
   card.addEventListener('pointerdown', (e) => {
@@ -70,25 +81,46 @@ export function makeInteractive({ card, getItem, grid, manager }) {
 
   function startResize(e) {
     const startX = e.clientX;
+    const startY = e.clientY;
+    const startRect = card.getBoundingClientRect();
     const startWidth = getItem().width;
+    const shown = grid.effHeightUnits(id) ?? getItem().height ?? 1;
     const startCol = getItem().position?.x ?? 0;
     card.classList.add('widget--resizing');
 
+    let previewW = startWidth;
+    let previewH = shown;
+
     const onMove = (ev) => {
       const deltaCols = Math.round((ev.clientX - startX) / (grid.cellW + grid.gap));
-      const newWidth = Math.min(Math.max(1, startWidth + deltaCols), MAX_COLUMNS - startCol);
-      card.style.width = `${newWidth * grid.cellW + (newWidth - 1) * grid.gap}px`;
-      card.dataset.previewWidth = String(newWidth);
+      previewW = Math.min(Math.max(1, startWidth + deltaCols), MAX_COLUMNS - startCol);
+      card.style.width = `${previewW * grid.cellW + (previewW - 1) * grid.gap}px`;
+
+      const deltaRows = Math.round((ev.clientY - startY) / (grid.cellHeight + grid.gap));
+      previewH = Math.max(1, shown + deltaRows);
+      const pxH = previewH * grid.cellHeight + (previewH - 1) * grid.gap;
+      const shownH = Math.max(pxH, startRect.height);
+      card.style.height = `${shownH}px`;
     };
 
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       card.classList.remove('widget--resizing');
-      const preview = Number(card.dataset.previewWidth || 0);
-      delete card.dataset.previewWidth;
-      if (preview && preview !== startWidth) {
-        grid.resizeWidget(id, preview - startWidth);
+
+      if (previewW !== startWidth) {
+        grid.resizeWidget(id, previewW - startWidth);
+      }
+      if (previewH !== shown) {
+        const rowPx = (h) => h * grid.cellHeight + (h - 1) * grid.gap;
+        if (previewH < shown && rowPx(previewH) < startRect.height) {
+          // can't pin below content — go back to snug
+          grid.setAutoHeight(id);
+        } else {
+          grid.resizeWidgetHeight(id, previewH);
+        }
+      } else if (previewW === startWidth) {
+        grid.render(); // no-op drag: restore auto/pinned height
       }
     };
 

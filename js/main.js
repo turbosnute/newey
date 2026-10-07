@@ -25,8 +25,8 @@ const widgetId = (moduleId, tag) => `${moduleId}.${tag}`;
 const DEFAULTS = {
   layout: {
     widgets: [
-      { id: widgetId('newey.widget.clock', 'main'), moduleId: 'newey.widget.clock', width: 4, height: 2, config: {}, position: { x: 0, y: 0 } },
-      { id: widgetId('newey.widget.weather', 'home'), moduleId: 'newey.widget.weather', width: 4, height: 3, config: {}, position: { x: 4, y: 0 } },
+      { id: widgetId('newey.widget.clock', 'main'), moduleId: 'newey.widget.clock', width: 4, height: 2, autoHeight: true, config: {}, position: { x: 0, y: 0 } },
+      { id: widgetId('newey.widget.weather', 'home'), moduleId: 'newey.widget.weather', width: 4, height: 3, autoHeight: true, config: {}, position: { x: 4, y: 0 } },
     ],
   },
   settings: {
@@ -47,6 +47,7 @@ function layoutUpdateStrategy(defaults, stored) {
       ...w,
       width: Math.min(Math.max(1, Math.round(w.width ?? 2)), MAX_COLUMNS),
       height: Math.max(1, Math.round(w.height ?? 2)),
+      autoHeight: w.autoHeight ?? true,
       position: packed.get(w.id) ?? { x: 0, y: 0 },
       config: w.config ?? {},
     });

@@ -246,10 +246,15 @@ export class SettingsPanel {
       if (live) input.addEventListener('change', () => submitLive?.());
 
       inputs[field.key] = { field, input };
-      const label = el('label', { class: 'field' }, [
-        el('span', { class: 'field__label', text: field.label }),
-        input,
-      ]);
+      // Checkbox rows sit inline with their label (help text below); other
+      // fields keep the label-above-input stack.
+      const check = field.type === 'checkbox';
+      const label = el('label', { class: `field${check ? ' field--check' : ''}` });
+      if (check) {
+        label.append(input, el('span', { class: 'field__label', text: field.label }));
+      } else {
+        label.append(el('span', { class: 'field__label', text: field.label }), input);
+      }
       if (field.help) label.append(el('small', { class: 'field__help', text: field.help }));
       form.append(label);
     }

@@ -122,6 +122,7 @@ export class WidgetManager {
       moduleId,
       width: moduleClass.defaultWidth,
       height: moduleClass.defaultHeight,
+      autoHeight: true,
       config: {},
     });
   }

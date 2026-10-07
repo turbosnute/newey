@@ -17,8 +17,10 @@ per browser profile.
   self-describing modules (widgets + background providers) loaded through a
   registry.
 - **Widgets included**
-  - *Digital clock* — time, date, 12/24 h, seconds, several sizes/formats.
-  - *Weather* — current conditions and hourly outlook from
+  - *Digital clock* — time, date, 12/24 h, seconds, centered or left
+    alignment, several sizes/formats.
+  - *Weather* — current conditions and hourly outlook (12 or 24 h labels)
+    from
     [api.met.no](https://api.met.no) for a searched city or, with the
     "Use my current location" option, the browser's geolocation; shows wind,
     humidity, precipitation and day/night icons.
@@ -54,8 +56,17 @@ node tools/make-icon.js
 
 - Add a widget via **Settings → Widgets → Add**.
 - Drag a widget anywhere to move it (grid: 12 columns, snap on release).
-- Drag the grip in a widget's bottom-right corner to resize it, or hover a
-  widget and use **Shift + mouse wheel**.
+- Cards automatically fit their height to the content, and placement uses
+  that *rendered* height — a slim box can sit right above or below a taller
+  one without being pushed away. Drag the grip in a widget's bottom-right
+  corner to resize it (horizontal: width in columns, vertical: height in
+  rows, which pins it), or hover a widget and use **Shift + mouse wheel**
+  (add **Alt** for height, then **Ctrl** to return a card to auto-height).
+- The weather widget's "Use my current location" uses the browser's
+  geolocation. If the permission was dismissed, allow it via
+  **chrome://extensions → Newey → Site settings → Location** and reopen the
+  tab. While location is unavailable the widget falls back to its last known
+  position and shows a note.
 - Click a widget's gear icon to configure it, the ✕ to remove it.
 - Background, provider options, and rotation interval live under
   **Settings → Background**.

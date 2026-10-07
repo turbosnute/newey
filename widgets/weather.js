@@ -90,6 +90,19 @@ function windChill(t, v) {
   return 13.12 + 0.6215 * t - 11.37 * vc + 0.3965 * t * vc;
 }
 
+/** Friendly, actionable text for a GeolocationPositionError. */
+function describeGeoError(err) {
+  switch (err?.code) {
+    case 1: return 'Location permission denied — allow it for this extension via chrome://extensions → Newey → Site settings → Location, then reopen the tab.';
+    case 2: return 'Device could not be located (check that the OS location service is on).';
+    case 3: return 'Locating timed out — please try again.';
+    default: return `Geolocation failed: ${err?.message ?? 'unknown error'}`;
+  }
+}
+
+/** Marks origin errors so #schedule can fall back to the pinned city. */
+class GeoError extends Error {}
+
 function compassFromDegrees(deg) {
   return ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][
     Math.round(((deg % 360) / 22.5)) % 16
@@ -121,6 +134,7 @@ class WeatherWidget extends BaseWidget {
     lon: 10.7461,
     timezone: 'Europe/Oslo',
     unit: 'c',            // c | f
+    hour24: true,         // 24-hour labels for the hourly slots
     hours: 4,             // number of hourly slots to show
     showDetails: true,    // wind / humidity details under current conditions
     useCurrentLocation: false, // browser geolocation instead of the city
@@ -146,6 +160,7 @@ class WeatherWidget extends BaseWidget {
     { key: 'unit', label: 'Temperature unit', type: 'select', options: [
       { value: 'c', label: 'Celsius' }, { value: 'f', label: 'Fahrenheit' },
     ] },
+    { key: 'hour24', label: '24-hour time', type: 'checkbox' },
     { key: 'hours', label: 'Forecast hours', type: 'select', options: [
       { value: '3', label: 'Next 3 hours' }, { value: '4', label: 'Next 4 hours' },
       { value: '6', label: 'Next 6 hours' }, { value: '8', label: 'Next 8 hours' },
@@ -163,6 +178,16 @@ class WeatherWidget extends BaseWidget {
       await this.#refresh();
     } catch (err) {
       console.error('[Weather] refresh failed:', err);
+
+      // "Use my current location" is often unavailable (permission denied,
+      // OS location off, …) — keep the dashboard useful by falling back to
+      // the last known position.
+      if (this.config.useCurrentLocation && this.#geo && err instanceof GeoError) {
+        try {
+          await this.#refreshWith({ lat: this.#geo.lat, lon: this.#geo.lon });
+          return;
+        } catch { /* fall through to the error below */ }
+      }
       this.#showError(err);
     }
   }
@@ -175,8 +200,12 @@ class WeatherWidget extends BaseWidget {
 
   async #resolveLocation() {
     if (this.config.useCurrentLocation) {
-      await this.#resolveViaGeolocation();
-      return;
+      const geo = await this.#resolveViaGeolocation();
+      // keep in-memory config usable elsewhere (last position is also the
+      // #schedule fallback when a later lookup fails)
+      this.config.lat = geo.lat;
+      this.config.lon = geo.lon;
+      return { lat: geo.lat, lon: geo.lon };
     }
     const wanted = (this.config.place || '').trim();
     if (!wanted) throw new Error('No location configured');
@@ -203,31 +232,36 @@ class WeatherWidget extends BaseWidget {
     if (!this.config.lat || !this.config.lon) {
       throw new Error(`Could not find a place called "${wanted}"`);
     }
+    return { lat: this.config.lat, lon: this.config.lon };
   }
 
   /** Read the browser's position (cached 10 min so tabs don't nag GPS). */
   async #resolveViaGeolocation() {
     const fresh =
       this.#geo && Date.now() - this.#geo.at < 10 * 60 * 1000;
-    if (fresh) return;
+    if (fresh) return this.#geo;
 
     if (!navigator.geolocation) throw new Error('Geolocation is not available');
     const pos = await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('Geolocation request timed out')), 10000);
       navigator.geolocation.getCurrentPosition(
-        (p) => { clearTimeout(timer); resolve(p); },
-        (err) => { clearTimeout(timer); reject(new Error(`Geolocation failed: ${err.message}`)); },
-        { timeout: 8000, maximumAge: 10 * 60 * 1000 }
+        (p) => resolve(p),
+        (err) => reject(new GeoError(describeGeoError(err))),
+        { maximumAge: 10 * 60 * 1000, timeout: 20000 }
       );
     });
     this.#geo = { at: Date.now(), lat: pos.coords.latitude, lon: pos.coords.longitude };
+    return this.#geo;
   }
 
   #geo = null;
 
   async #refresh() {
-    await this.#resolveLocation();
-    const url = this.#buildURL(this.config);
+    const coords = await this.#resolveLocation();
+    await this.#refreshWith(coords);
+  }
+
+  async #refreshWith({ lat, lon }) {
+    const url = this.#buildURL({ lat, lon });
     const cacheKey = `met:${url}`;
 
     const data = await apiCache.get(cacheKey, 5 * 60 * 1000, () =>
@@ -265,11 +299,14 @@ class WeatherWidget extends BaseWidget {
     const wind = instant.wind_speed ?? 0;
     const feel = windChill(temp, Math.min(wind, 30));
 
+    const hourFormat = new Intl.DateTimeFormat(undefined, this.config.hour24
+      ? { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
+      : { hour: 'numeric', hourCycle: 'h12' });
     const hourItems = hours.map((e) => {
       const sym = e.data.next_1_hours?.summary?.symbol_code ?? '';
       const ic = symbolToIcon(sym);
       const t = new Date(e.time);
-      const label = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).format(t);
+      const label = hourFormat.format(t);
       const fallbackDay = isDaylightIn(this.config.timezone || 'UTC');
       return `<li class="weather-hour">
         <span class="weather-hour__time">${label}</span>

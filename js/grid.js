@@ -11,7 +11,8 @@
  *   left   = x * (cellW + gap)
  *   top    = y * (cellH + gap)
  *   width  = w * cellW + (w - 1) * gap
- *   height = h * cellH + (h - 1) * gap
+ *   height = h * cellH + (h - 1) * gap   (only when the user pinned it —
+ *           by default cards auto-size to their content, item.autoHeight)
  */
 
 import { deepClone } from './utils.js';
@@ -71,6 +72,25 @@ export class GridLayout {
     return this.section.value ?? { widgets: [] };
   }
 
+  /**
+   * Height of a widget in grid rows, as far as placement physics is
+   * concerned. Pinned cards use their row count; auto-fit cards only occupy
+   * the rows their rendered content actually covers (a snug clock is one
+   * row tall, not the two its record may still claim).
+   */
+  #effH(w) {
+    if (w.autoHeight === false) return w.height ?? 1;
+    const card = this.cards.get(w.id);
+    const px = card ? card.offsetHeight : (w.height ?? 1) * this.cellHeight;
+    return Math.max(1, Math.ceil(px / (this.cellHeight + this.gap)));
+  }
+
+  /** Public hook for interactions (Alt+Shift+wheel, grip drags). */
+  effHeightUnits(id) {
+    const w = this.layout.widgets.find((x) => x.id === id);
+    return w ? this.#effH(w) : null;
+  }
+
   attach(root) {
     this.root = root;
     root.classList.add('grid-root');
@@ -111,7 +131,14 @@ export class GridLayout {
       card.style.left = `${pos.x * (this.cellW + this.gap) + this.padding}px`;
       card.style.top = `${pos.y * (this.cellHeight + this.gap) + this.padding}px`;
       card.style.width = `${item.width * this.cellW + (item.width - 1) * this.gap}px`;
-      card.style.height = `${(item.height ?? 1) * this.cellHeight + ((item.height ?? 1) - 1) * this.gap}px`;
+      // Auto-height cards hug their content; only a pinned height maps the
+      // stored row count to pixels.
+      if (item.autoHeight === false) {
+        const h = item.height ?? 1;
+        card.style.height = `${h * this.cellHeight + (h - 1) * this.gap}px`;
+      } else {
+        card.style.height = 'auto';
+      }
     }
 
     for (const [id, card] of [...this.cards]) {
@@ -146,11 +173,11 @@ export class GridLayout {
   #bumpOverlaps(widgets, targetId) {
     const target = widgets.find((w) => w.id === targetId);
     if (!target) return;
-    const th = target.height ?? 1;
+    const th = this.#effH(target);
     let changed = false;
     for (const w of widgets) {
       if (w === target) continue;
-      const wh = w.height ?? 1;
+      const wh = this.#effH(w);
       const overlaps =
         w.position.x < target.position.x + target.width &&
         w.position.x + w.width > target.position.x &&
@@ -163,7 +190,7 @@ export class GridLayout {
     }
     if (!changed) return;
     const packed = packBoxes(widgets.map((w) => ({
-      id: w.id, x: w.position.x, y: w.position.y, w: w.width, h: w.height,
+      id: w.id, x: w.position.x, y: w.position.y, w: w.width, h: this.#effH(w),
     })));
     for (const w of widgets) w.position = packed.get(w.id) ?? w.position;
   }
@@ -185,7 +212,11 @@ export class GridLayout {
     return target.position;
   }
 
-  /** Grow/shrink a widget by `delta` columns. */
+  /**
+   * Grow/shrink a widget by `delta` columns. Vertical width-changes pin the
+   * height (autoHeight = false); explicit height changes come through
+   * resizeWidgetHeight.
+   */
   resizeWidget(id, delta, { commit = true } = {}) {
     const widgets = deepClone(this.layout.widgets);
     const target = widgets.find((w) => w.id === id);
@@ -195,11 +226,45 @@ export class GridLayout {
     if (commit) this.section.overwrite({ ...this.layout, widgets });
   }
 
+  /** Set a widget's height in rows and stop auto-sizing it. */
+  resizeWidgetHeight(id, h, { commit = true } = {}) {
+    const widgets = deepClone(this.layout.widgets);
+    const target = widgets.find((w) => w.id === id);
+    if (!target) return;
+    target.height = Math.max(1, Math.min(8, Math.round(h)));
+    // never pin a card smaller than its rendered content
+    const card = this.cards.get(id);
+    if (card) {
+      const contentPx = card.scrollHeight;
+      while (
+        target.height < 8 &&
+        target.height * this.cellHeight + (target.height - 1) * this.gap < contentPx
+      ) target.height += 1;
+      if (
+        target.height * this.cellHeight + (target.height - 1) * this.gap < contentPx
+      ) return; // not satisfiable — keep current state
+    }
+    target.autoHeight = false;
+    this.#bumpOverlaps(widgets, id);
+    if (commit) this.section.overwrite({ ...this.layout, widgets });
+  }
+
+  /** Return a widget to content-snug auto sizing. */
+  setAutoHeight(id, { commit = true } = {}) {
+    const widgets = deepClone(this.layout.widgets);
+    const target = widgets.find((w) => w.id === id);
+    if (!target || target.autoHeight !== false) return;
+    target.autoHeight = true;
+    if (commit) this.section.overwrite({ ...this.layout, widgets });
+  }
+
   /** Add a widget record at the first free spot. Returns the stored record. */
   addWidget(record, { commit = true } = {}) {
     const widgets = deepClone(this.layout.widgets);
     const packed = packBoxes([
-      ...widgets.map((w) => ({ id: w.id, x: w.position?.x, y: w.position?.y, w: w.width, h: w.height })),
+      // existing widgets: their effective (rendered) row usage
+      ...widgets.map((w) => ({ id: w.id, x: w.position?.x, y: w.position?.y, w: w.width, h: this.#effH(w) })),
+      // the new one has no DOM yet — its declared default rows is the guess
       { id: record.id, w: record.width, h: record.height },
     ]);
     const position = packed.get(record.id);

@@ -29,6 +29,12 @@ html.theme-light {
 
 * { box-sizing: border-box; }
 
+/* Native dropdowns, scrollbars, date pickers: dark by default, light when
+ * .theme-light is set (otherwise Chrome renders white popups our light-gray
+ * text can't be read on). */
+:root { color-scheme: dark; }
+html.theme-light { color-scheme: light; }
+
 html, body {
   margin: 0;
   height: 100%;
@@ -195,6 +201,9 @@ html.theme-light .widget-btn:hover { background: rgba(255 255 255 / 0.7); }
 /* ------------------------------------------------------------------ *
  * Clock
  * ------------------------------------------------------------------ */
+
+.clock--left { text-align: left; }
+.clock--center { text-align: center; }
 
 .clock-time {
   font-family: var(--font-mono);
@@ -378,6 +387,23 @@ html.theme-light .weather-hour { background: rgba(0 0 0 / 0.06); }
 .field { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
 .field__label { font-size: 12px; opacity: 0.8; }
 .field__help { font-size: 11px; opacity: 0.5; }
+.field--check {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  margin: 10px 0;
+  cursor: pointer;
+}
+.field--check input[type='checkbox'] {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+.field--check .field__label { flex: 1; font-size: 13px; }
+.field--check .field__help { flex-basis: 100%; margin-left: 25px; margin-top: -2px; }
 
 .input {
   padding: 7px 10px;
@@ -389,6 +415,16 @@ html.theme-light .weather-hour { background: rgba(0 0 0 / 0.06); }
   font-size: 13px;
 }
 .input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Options inside an expanded select inherit the page's light-gray text on
+ * some platforms; force readable surfaces in both themes. */
+.input option {
+  background: #17171c;
+  color: #e8e8ea;
+}
+html.theme-light .input option {
+  background: #fff;
+  color: #17171c;
+}
 
 .form-actions {
   display: flex;
