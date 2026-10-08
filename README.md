@@ -26,11 +26,10 @@ per browser profile.
     humidity, precipitation and day/night icons.
 - **Background providers included**
   - *PrettyEarth* — random satellite photo from the Google Earth View
-    gallery via the standalone [prettyearth.js](prettyearth.js) module,
-    with an optional country filter. The display name is the photo's place
-    (geocoded locality + country when the data has it, otherwise region +
-    country), and the link opens that spot in Google Earth with the camera
-    distance matched to the source zoom.
+    gallery, with an optional country filter. The display name is the
+    photo's place (geocoded locality + country when the data has it,
+    otherwise region + country), and the link opens that spot in Google
+    Earth with the camera distance matched to the source zoom.
   - *Bing* — today's bing.com homepage image.
 - **Image info** — the bottom-right corner shows the current background's
   title as a link, with the copyright/attribution on its own line beneath.
@@ -79,9 +78,9 @@ node tools/make-icon.js
 ```
 manifest.json            extension manifest (MV3)
 newtab.html              page shell
-prettyearth.js           standalone 3rd-party module (repo root)
 js/
-  main.js                boot: defaults → storage → registry → managers
+  newey.js               central script: boot (defaults → storage → registry →
+                         managers), the one file every tab starts from
   module-api.js          BaseWidget, BaseBackgroundProvider, define*()
   modules.js             registry & loader (primers keep it modular)
   storage.js             persisted sections over chrome.storage.local
@@ -93,7 +92,8 @@ js/
   utils.js               fetch proxy helper, cache, DOM helpers
   bg-proxy.js            MV3 service worker: whitelisted fetch proxy
 backgrounds/
-  prettyearth-provider.js  adapter: wires prettyearth.js into the provider API
+  prettyearth-provider.js  self-contained PrettyEarth provider (fetcher,
+                           id list, place-name & Google-Earth-link logic)
   bing-provider.js         adapter for bing.com's daily image
 widgets/
   clock.js               digital clock widget

@@ -14,8 +14,7 @@
  *                       Only one is active, but they are freely swappable.
  *
  * Module files stay inert until the core imports them, so the architecture
- * keeps third-party modules (such as ./prettyearth.js at the repo root) from
- * running uncontrolled top-level code.
+ * keeps drop-in modules from running uncontrolled top-level code.
  */
 
 /** Per-instance base functionality shared by all widgets. */

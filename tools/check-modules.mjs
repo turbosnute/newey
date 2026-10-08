@@ -19,7 +19,7 @@ const files = [
   'js/widgets.js',
   'js/settings.js',
   'js/background.js',
-  'js/main.js', // side effects avoided: main() throws but only after import completes
+  'js/newey.js', // side effects avoided: main() throws but only after import completes
   'js/bg-proxy.js',
   'widgets/clock.js',
   'widgets/weather.js',

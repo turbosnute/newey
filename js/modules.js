@@ -2,9 +2,9 @@
  * Newey — module registry & loader.
  *
  * The registry knows every module available to the dashboard. Built-ins are
- * imported statically (bundled with the extension). Additional third-party
- * modules — like a drop-in file next to ./prettyearth.js — can be added with
- * registerModulePrimer() without touching the core.
+ * imported statically (bundled with the extension). Additional drop-in
+ * modules can be registered with registerModulePrimer() without touching
+ * the core.
  */
 
 import { BaseWidget, BaseBackgroundProvider, ModuleError } from './module-api.js';
