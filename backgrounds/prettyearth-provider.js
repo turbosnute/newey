@@ -60,6 +60,52 @@ const EARTH_VIEW_WIDTH_PX = 800;
 const MERCATOR_MPP_Z0 = 156543.03392;
 const EARTH_FOV_DEG = 35; // Google Earth web share-link field of view
 
+// PrettyEarth geocode data carries full country names, but flag emoji are
+// built from ISO 3166-1 alpha-2 codes. Intl can only map code → name, so the
+// reverse table is rebuilt at load time from Intl.DisplayNames, which keeps
+// the provider self-contained (no external data file).
+const COUNTRY_CODE_BY_NAME = buildReverseCountryTable();
+
+/** @returns {Record<string, string>} lowercase country name → ISO 3166-1 alpha-2 */
+function buildReverseCountryTable() {
+  const displayNames = new Intl.DisplayNames(['en'], { type: 'region' });
+  const table = {};
+  for (let a = 65; a <= 90; a++) {
+    for (let b = 65; b <= 90; b++) {
+      const code = String.fromCharCode(a, b);
+      let name;
+      try {
+        name = displayNames.of(code);
+      } catch {
+        continue;
+      }
+      // Intl returns the input unchanged for unknown codes like "ZZ".
+      if (name && name !== code && /^[A-Z]{2}$/.test(name) === false) {
+        table[name.toLowerCase()] = code;
+      }
+    }
+  }
+  return table;
+}
+
+/**
+ * Flag emoji for a country name, or '' when no match. Flags are the pair of
+ * regional-indicator symbols derived from the ISO alpha-2 code.
+ * @param {string} countryName - e.g. "United States", "the Netherlands"
+ * @returns {string}
+ */
+export function countryFlagFor(countryName) {
+  const name = (countryName || '').trim().toLowerCase();
+  if (!name) return '';
+  let code = COUNTRY_CODE_BY_NAME[name];
+  if (!code && name.startsWith('the ')) code = COUNTRY_CODE_BY_NAME[name.slice(4)];
+  if (!code) return '';
+  // codePoints: 'A'..'Z' (65-90) → regional indicators U+1F1E6..U+1F1FF
+  return [...code.toUpperCase()]
+    .map((ch) => String.fromCodePoint(0x1f1e6 + ch.charCodeAt(0) - 65))
+    .join('');
+}
+
 /**
  * Human-readable place name for a PrettyEarth image, in order of preference:
  * geocode locality + country (e.g. "Miami Beach, United States", or just
@@ -69,7 +115,7 @@ const EARTH_FOV_DEG = 35; // Google Earth web share-link field of view
  * @param {object} info - result of getPrettyEarthImageUrl()
  * @returns {string}
  */
-export function prettyEarthDisplayName(info) {
+export function prettyEarthDisplayNameBase(info) {
   const g = info.geocode;
   if (g) {
     const parts = [g.locality, g.country].filter(Boolean);
@@ -78,6 +124,36 @@ export function prettyEarthDisplayName(info) {
   const fallback = [info.region, info.country].filter(Boolean);
   if (fallback.length) return fallback.join(', ');
   return `Earth View #${info.id}`;
+}
+
+/**
+ * @param {object} info - result of getPrettyEarthImageUrl()
+ * @returns {string} the country the image is credited to; '' when unknown
+ */
+function prettyEarthCountry(info) {
+  return (
+    info.geocode?.country ||
+    info.country ||
+    (info.region && COUNTRY_CODE_BY_NAME[info.region.toLowerCase()] ? info.region : '') ||
+    ''
+  );
+}
+
+/**
+ * Display name with the flag emoji appended when asked for. The flag is only
+ * added when the display name actually ends with a known country (so the pure
+ * "Earth View #id" fallback never grows a flag).
+ * @param {object} info - result of getPrettyEarthImageUrl()
+ * @param {object} [options]
+ * @param {boolean} [options.flag=false] - append the country flag emoji
+ * @returns {string}
+ */
+export function prettyEarthDisplayName(info, { flag = false } = {}) {
+  if (!flag) return prettyEarthDisplayNameBase(info);
+  const country = prettyEarthCountry(info);
+  const flagEmoji = countryFlagFor(country);
+  if (!flagEmoji) return prettyEarthDisplayNameBase(info);
+  return `${prettyEarthDisplayNameBase(info)} ${flagEmoji}`;
 }
 
 /**
@@ -113,9 +189,11 @@ class PrettyEarthBackground extends BaseBackgroundProvider {
   static hasConfig = true;
   static defaultConfig = {
     country: '', // empty = any country (case-insensitive substring match)
+    flag: false,
   };
   static configSchema = [
     { key: 'country', label: 'Country filter', type: 'text', help: 'Only show images from this country (e.g. Australia). Empty = any.' },
+    { key: 'flag', label: 'Show country flag', type: 'checkbox', help: 'Append the country\u2019s flag emoji after the place name.' },
   ];
 
   /**
@@ -179,7 +257,7 @@ class PrettyEarthBackground extends BaseBackgroundProvider {
   #toBackground(info) {
     return {
       image: info.url, // data:image/jpeg;base64 URI
-      title: prettyEarthDisplayName(info),
+      title: prettyEarthDisplayName(info, { flag: Boolean(this.config.flag) }),
       link: prettyEarthLink(info),
       author: (info.attribution || '').replace(/\u00a9/g, '©'),
       source: 'PrettyEarth',

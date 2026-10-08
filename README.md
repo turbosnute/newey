@@ -29,7 +29,8 @@ per browser profile.
     gallery, with an optional country filter. The display name is the
     photo's place (geocoded locality + country when the data has it,
     otherwise region + country), and the link opens that spot in Google
-    Earth with the camera distance matched to the source zoom.
+    Earth with the camera distance matched to the source zoom. An optional
+    setting appends the country's flag emoji to the display name.
   - *Bing* — today's bing.com homepage image.
 - **Image info** — the bottom-right corner shows the current background's
   title as a link, with the copyright/attribution on its own line beneath.
@@ -93,7 +94,7 @@ js/
   bg-proxy.js            MV3 service worker: whitelisted fetch proxy
 backgrounds/
   prettyearth-provider.js  self-contained PrettyEarth provider (fetcher,
-                           id list, place-name & Google-Earth-link logic)
+                           id list, place-name, flag & Google-Earth-link logic)
   bing-provider.js         adapter for bing.com's daily image
 widgets/
   clock.js               digital clock widget
