@@ -26,11 +26,11 @@ per browser profile.
     humidity, precipitation and day/night icons.
 - **Background providers included**
   - *PrettyEarth* — random satellite photo from the Google Earth View
-    gallery, with an optional country filter. The display name is the
-    photo's place (geocoded locality + country when the data has it,
-    otherwise region + country), and the link opens that spot in Google
-    Earth with the camera distance matched to the source zoom. An optional
-    setting appends the country's flag emoji to the display name.
+    gallery. The display name is the photo's place (geocoded locality +
+    country when the data has it, otherwise region + country), and the link
+    opens that spot in Google Earth with the camera distance matched to the
+    source zoom. An optional setting appends the country's flag emoji to the
+    display name (see [Licence](#licence) for the bundled Twemoji flag font).
   - *Bing* — today's bing.com homepage image.
 - **Image info** — the bottom-right corner shows the current background's
   title as a link, with the copyright/attribution on its own line beneath.
@@ -96,6 +96,8 @@ backgrounds/
   prettyearth-provider.js  self-contained PrettyEarth provider (fetcher,
                            id list, place-name, flag & Google-Earth-link logic)
   bing-provider.js         adapter for bing.com's daily image
+fonts/
+  TwemojiCountryFlags.woff2  country-flag emoji font for Windows/Chrome
 widgets/
   clock.js               digital clock widget
   weather.js             met.no weather widget
@@ -200,4 +202,9 @@ restores that layout.
 
 Provided as-is for personal use. Background photos belong to their
 respective authors and are shown with attribution; see the info line in the
-bottom-right corner of a running dashboard.
+bottom-right corner of a running dashboard. The bundled
+`fonts/TwemojiCountryFlags.woff2` (used to render country flag emoji on
+Windows) is a Twemoji subset from the MIT-licensed
+[talkjs/country-flag-emoji-polyfill](https://github.com/talkjs/country-flag-emoji-polyfill);
+Twemoji graphics are (c) Twitter/X and licensed under
+[CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/).
