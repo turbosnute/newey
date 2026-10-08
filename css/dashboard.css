@@ -100,9 +100,21 @@ html, body {
   color: rgba(var(--fg) / 0.8);
   text-shadow: 0 1px 2px rgba(0 0 0 / 0.6);
   max-width: 44vw;
-  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+/* Wrap long place names / attributions onto a second visual line if needed;
+   still clipped per line. */
+#background-credit a,
+#background-credit .credit-author,
+#background-credit small {
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 html.theme-light #background-credit { text-shadow: 0 1px 2px rgba(255 255 255 / 0.7); }

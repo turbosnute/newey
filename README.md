@@ -27,10 +27,13 @@ per browser profile.
 - **Background providers included**
   - *PrettyEarth* — random satellite photo from the Google Earth View
     gallery via the standalone [prettyearth.js](prettyearth.js) module,
-    with an optional country filter.
+    with an optional country filter. The display name is the photo's place
+    (geocoded locality + country when the data has it, otherwise region +
+    country), and the link opens that spot in Google Earth with the camera
+    distance matched to the source zoom.
   - *Bing* — today's bing.com homepage image.
 - **Image info** — the bottom-right corner shows the current background's
-  title (link) and author.
+  title as a link, with the copyright/attribution on its own line beneath.
 - **Theme awareness** — Newey measures the background brightness and flips
   between light and dark text automatically.
 - **Zero build step** — plain ES modules, no bundler, no dependencies.

@@ -8,6 +8,59 @@
 import { BaseBackgroundProvider, defineBackground } from '../js/module-api.js';
 import { getPrettyEarthImageUrl, getRandomPrettyEarthImageUrl, PRETTY_EARTH_IDS } from '../prettyearth.js';
 
+// Earth View source images are 800px wide; meters per pixel at Mercator zoom z
+// and latitude lat: 156543.03392 * cos(lat) / 2^z (verified against the
+// `bounds` field of the prettyearth-examples files).
+const EARTH_VIEW_WIDTH_PX = 800;
+const MERCATOR_MPP_Z0 = 156543.03392;
+const EARTH_FOV_DEG = 35; // Google Earth web share-link field of view
+
+/**
+ * Human-readable place name for a PrettyEarth image, in order of preference:
+ * geocode locality + country (e.g. "Miami Beach, United States", or just
+ * "Crimea" when the geocode only has a country), then top-level region +
+ * country (e.g. "Västra Götaland County, Sweden"), and only as a last
+ * resort the raw "Earth View #id".
+ * @param {object} info - result of getPrettyEarthImageUrl()
+ * @returns {string}
+ */
+export function prettyEarthDisplayName(info) {
+  const g = info.geocode;
+  if (g) {
+    const parts = [g.locality, g.country].filter(Boolean);
+    if (parts.length) return parts.join(', ');
+  }
+  const fallback = [info.region, info.country].filter(Boolean);
+  if (fallback.length) return fallback.join(', ');
+  return `Earth View #${info.id}`;
+}
+
+/**
+ * Google Earth web link centred on the image's coordinates. When the zoom
+ * of the source imagery is known, the camera distance is derived from the
+ * 800px source width so Google Earth shows roughly the same patch of
+ * ground as the original Earth View crop.
+ * @param {object} info - result of getPrettyEarthImageUrl()
+ * @returns {string}
+ */
+export function prettyEarthLink(info) {
+  const num = (n, places = 6) => Number(Number(n).toFixed(places)).toString();
+  if (!Number.isFinite(info.lat) || !Number.isFinite(info.lng)) {
+    return `https://earthview.withgoogle.com/${info.id}`;
+  }
+  let distance = 5000; // neutral overview distance when zoom is unknown
+  if (Number.isFinite(info.zoom)) {
+    const metersPerPixel = (MERCATOR_MPP_Z0 * Math.cos((info.lat * Math.PI) / 180)) / 2 ** info.zoom;
+    const groundWidth = EARTH_VIEW_WIDTH_PX * metersPerPixel;
+    distance = groundWidth / (2 * Math.tan(((EARTH_FOV_DEG / 2) * Math.PI) / 180));
+  }
+  const altitude = Number.isFinite(info.elevation) ? info.elevation : 0;
+  return (
+    `https://earth.google.com/web/@${num(info.lat, 7)},${num(info.lng, 7)},${num(altitude)}a,` +
+    `${num(distance)}d,${EARTH_FOV_DEG}y,0h,0t,0r`
+  );
+}
+
 class PrettyEarthBackground extends BaseBackgroundProvider {
   static id = 'newey.background.prettyearth';
   static name = 'PrettyEarth';
@@ -62,20 +115,27 @@ class PrettyEarthBackground extends BaseBackgroundProvider {
     for (let attempt = 0; attempt < 40; attempt++) {
       const id = PRETTY_EARTH_IDS[Math.floor(Math.random() * PRETTY_EARTH_IDS.length)];
       const info = await getPrettyEarthImageUrl(id);
-      const tags = [info.country, info.attribution].filter(Boolean).join(' ').toLowerCase();
+      const tags = [info.country, info.region, info.geocode?.locality, info.attribution]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
       if (tags.includes(wanted)) return this.#toBackground(info);
       await new Promise((r) => setTimeout(r, 40));
     }
     throw new Error(`No PrettyEarth image found for country "${country}"`);
   }
 
+  /**
+   * @returns {{image:string,title:string,link:string,author:string,source:string}}
+   *   `title` is the place name (never the Earth View id when a place is
+   *   known), `link` opens the spot in Google Earth, and `author` is the
+   *   copyright attribution.
+   */
   #toBackground(info) {
-    // "Australia" -> "Earth View #1003 · Australia"
-    const place = info.country ? ` · ${info.country}` : '';
     return {
       image: info.url, // data:image/jpeg;base64 URI
-      title: `Earth View #${info.id}${place}`,
-      link: `https://earthview.withgoogle.com/${info.id}`,
+      title: prettyEarthDisplayName(info),
+      link: prettyEarthLink(info),
       author: (info.attribution || '').replace(/\u00a9/g, '©'),
       source: 'PrettyEarth',
     };

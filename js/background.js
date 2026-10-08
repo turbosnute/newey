@@ -95,10 +95,12 @@ export class BackgroundManager {
 
     if (this.credit) {
       const link = info.link || '#';
+      // Line 1: display name (link). Line 2: copyright/attribution on its
+      // own line under the other info, for every provider.
       this.credit.innerHTML = `
         <a href="${escapeAttr(link)}" target="_blank" rel="noreferrer noopener"
            title="Open image source">${escapeHtml(info.title || 'Background image')}</a>
-        ${info.author ? `<span class="credit-author"> · ${escapeHtml(info.author)}</span>` : ''}
+        ${info.author ? `<span class="credit-author">${escapeHtml(info.author)}</span>` : ''}
       `;
       this.credit.classList.remove('hidden');
     }

@@ -112,6 +112,8 @@ export class BaseBackgroundProvider {
    * @returns {Promise<null|{image: string, title: string, link: string,
    *                     author?: string, source?: string}>|void>}
    *   image: URL or data-URI usable as a CSS background.
+   *   title: display name of the image (shown as a link).
+   *   author: copyright/attribution, rendered on its own line beneath the title.
    */
   async getBackground() {
     throw new Error('Provider must implement getBackground()');
