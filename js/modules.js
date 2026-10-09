@@ -10,12 +10,14 @@
 import { BaseWidget, BaseBackgroundProvider, ModuleError } from './module-api.js';
 import clockModule from '../widgets/clock.js';
 import weatherModule from '../widgets/weather.js';
+import notesModule from '../widgets/notes.js';
 import prettyearthProvider from '../backgrounds/prettyearth-provider.js';
 import bingProvider from '../backgrounds/bing-provider.js';
 
 const BUILTIN_PRIMERS = [
   async () => clockModule,
   async () => weatherModule,
+  async () => notesModule,
   async () => prettyearthProvider,
   async () => bingProvider,
 ];

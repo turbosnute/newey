@@ -46,7 +46,9 @@ function layoutUpdateStrategy(defaults, stored) {
     widgets.push({
       ...w,
       width: Math.min(Math.max(1, Math.round(w.width ?? 2)), MAX_COLUMNS),
-      height: Math.max(1, Math.round(w.height ?? 2)),
+      // height stays fractional: auto cards occupy a fractional number of
+      // rows and reload must reproduce the pixel-true live layout
+      height: Number.isFinite(w.height) ? Math.max(0.1, w.height) : 2,
       autoHeight: w.autoHeight ?? true,
       position: packed.get(w.id) ?? { x: 0, y: 0 },
       config: w.config ?? {},
@@ -93,6 +95,14 @@ async function main() {
 
   manager.start();
   settingsPanel.start();
+
+  // Widgets may persist their own config (e.g. the Notes editor): they
+  // dispatch `newey:widget-config` on their card and it is routed to the
+  // widget manager like a settings-panel save.
+  document.getElementById('dashboard').addEventListener('newey:widget-config', (e) => {
+    const { id, config } = e.detail ?? {};
+    if (id && config) manager.applyConfig(id, config);
+  });
 
   const background = new BackgroundManager({ registry, settingsSection });
   await background.start();

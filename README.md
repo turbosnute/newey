@@ -24,6 +24,9 @@ per browser profile.
     [api.met.no](https://api.met.no) for a searched city or, with the
     "Use my current location" option, the browser's geolocation; shows wind,
     humidity, precipitation and day/night icons.
+  - *Notes* — a sticky note written in Markdown (headings, lists, quotes,
+    tables, code, links, …). Click the note (or its pencil button) to edit;
+    changes save as you type.
 - **Background providers included**
   - *PrettyEarth* — random satellite photo from the Google Earth View
     gallery. The display name is the photo's place (geocoded locality +
@@ -101,6 +104,7 @@ fonts/
 widgets/
   clock.js               digital clock widget
   weather.js             met.no weather widget
+  notes.js               Markdown notes widget (built-in renderer)
 css/dashboard.css        dashboard theme
 tools/                   import check + icon generator (Node)
 ```

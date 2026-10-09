@@ -86,6 +86,14 @@ export class BaseWidget {
   onConfigUpdate(newConfig) {
     this.config = newConfig;
   }
+
+  /**
+   * Widgets can persist their own config changes (e.g. in-widget editors):
+   * dispatch a `newey:widget-config` CustomEvent with
+   * `{ detail: { id, config } }` on this.container; the dashboard routes it
+   * to the widget manager, which writes the layout and calls
+   * onConfigUpdate()/onRender() for the instance.
+   */
 }
 
 /**

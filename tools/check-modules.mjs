@@ -23,6 +23,7 @@ const files = [
   'js/bg-proxy.js',
   'widgets/clock.js',
   'widgets/weather.js',
+  'widgets/notes.js',
   'backgrounds/prettyearth-provider.js',
   'backgrounds/bing-provider.js',
 ];

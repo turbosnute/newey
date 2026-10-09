@@ -13,6 +13,12 @@
  *   width  = w * cellW + (w - 1) * gap
  *   height = h * cellH + (h - 1) * gap   (only when the user pinned it —
  *           by default cards auto-size to their content, item.autoHeight)
+ *
+ * Columns are whole cells, but vertical placement is pixel-true: a card's
+ * stored y is a fractional row and an auto-fit card only occupies
+ * h = (rendered px + gap) / (cellH + gap) rows. A card released flush under
+ * a neighbour therefore lands exactly `gap` px below it instead of being
+ * forced down to the next whole row.
  */
 
 import { deepClone } from './utils.js';
@@ -20,6 +26,9 @@ import { deepClone } from './utils.js';
 export const MAX_COLUMNS = 12;
 
 const clampW = (w) => Math.min(Math.max(1, Math.round(w ?? 2)), MAX_COLUMNS);
+
+/** Release points within this distance (rows) of a snug spot snap to it. */
+const SNAP_TOLERANCE = 0.6;
 
 /**
  * First-fit packs boxes ({id, w, h, x?, y?}). Items with a stored position
@@ -42,8 +51,11 @@ export function packBoxes(items, { maxColumns = MAX_COLUMNS } = {}) {
   for (const item of items) {
     if (used.some((b) => b.id === item.id)) continue;
     const box = { id: item.id, w: clampW(item.w), h: item.h ?? 1 };
-    for (let y = 0; ; y++) {
-      let done = false;
+    // Candidate tops: the grid origin and the bottom edge of every placed
+    // box — including fractional bottoms, so snug gaps get used too.
+    const tops = [0, ...used.map((b) => b.y + b.h)].sort((a, b) => a - b);
+    let done = false;
+    for (const y of tops) {
       for (let x = 0; x + box.w <= maxColumns; x++) {
         if (fits({ ...box, x, y })) {
           used.push({ ...box, x, y });
@@ -58,6 +70,10 @@ export function packBoxes(items, { maxColumns = MAX_COLUMNS } = {}) {
 }
 
 export class GridLayout {
+  /** Watches cards so content growth re-settles the cards below them. */
+  #cardObserver = null;
+  #gravityFrame = null;
+
   constructor({ layoutSection, gap = 20, padding = 40, cellHeight = 100 }) {
     this.section = layoutSection;
     this.gap = gap;
@@ -79,16 +95,19 @@ export class GridLayout {
    * row tall, not the two its record may still claim).
    */
   #effH(w) {
-    if (w.autoHeight === false) return w.height ?? 1;
+    if (w.autoHeight === false) return Math.max(1, w.height ?? 1);
+    // Pixel-true: an auto-fit card only occupies (px + gap) rows of pitch,
+    // so a card released flush under it lands exactly one gap below instead
+    // of being forced to the next whole row.
     const card = this.cards.get(w.id);
-    const px = card ? card.offsetHeight : (w.height ?? 1) * this.cellHeight;
-    return Math.max(1, Math.ceil(px / (this.cellHeight + this.gap)));
+    if (!card) return Math.max(0.1, w.height ?? 1);
+    return Math.max(0.1, (card.offsetHeight + this.gap) / (this.cellHeight + this.gap));
   }
 
-  /** Public hook for interactions (Alt+Shift+wheel, grip drags). */
+  /** Public hook for interactions (Alt+Shift+wheel, grip drags): whole rows. */
   effHeightUnits(id) {
     const w = this.layout.widgets.find((x) => x.id === id);
-    return w ? this.#effH(w) : null;
+    return w ? Math.max(1, Math.ceil(this.#effH(w))) : null;
   }
 
   attach(root) {
@@ -96,6 +115,7 @@ export class GridLayout {
     root.classList.add('grid-root');
     this.section.subscribe(() => this.render());
     window.addEventListener('resize', () => this.render());
+    this.#cardObserver = new ResizeObserver(() => this.#settleContent());
     this.render();
   }
 
@@ -128,6 +148,7 @@ export class GridLayout {
         this.cards.set(item.id, card);
         this.root.appendChild(card);
       }
+      this.#cardObserver?.observe(card);
       card.style.left = `${pos.x * (this.cellW + this.gap) + this.padding}px`;
       card.style.top = `${pos.y * (this.cellHeight + this.gap) + this.padding}px`;
       card.style.width = `${item.width * this.cellW + (item.width - 1) * this.gap}px`;
@@ -143,6 +164,7 @@ export class GridLayout {
 
     for (const [id, card] of [...this.cards]) {
       if (!seen.has(id)) {
+        this.#cardObserver?.unobserve(card);
         card.remove();
         this.cards.delete(id);
       }
@@ -167,37 +189,107 @@ export class GridLayout {
   }
 
   /**
-   * After a move/resize, any widget overlapping the target loses its stored
-   * position and is repacked into the first free spot.
+   * Resolve overlaps with gravity: cards only ever move straight DOWN in
+   * their own columns — nothing is teleported to a first-fit slot. For each
+   * pair that overlaps both horizontally and vertically, the upper card
+   * keeps its spot and the lower one slides flush below it (ties keep the
+   * earlier list entry). Needs at most a couple of sweeps because a card
+   * can only be pushed further down, never up.
+   * Mutates the given widget records in place.
    */
-  #bumpOverlaps(widgets, targetId) {
-    const target = widgets.find((w) => w.id === targetId);
-    if (!target) return;
-    const th = this.#effH(target);
-    let changed = false;
-    for (const w of widgets) {
-      if (w === target) continue;
-      const wh = this.#effH(w);
-      const overlaps =
-        w.position.x < target.position.x + target.width &&
-        w.position.x + w.width > target.position.x &&
-        w.position.y < target.position.y + th &&
-        w.position.y + wh > target.position.y;
-      if (overlaps) {
-        w.position = { x: undefined, y: undefined }; // forces re-pack
-        changed = true;
+  #settle(widgets) {
+    let guard = 0;
+    let moved = true;
+    while (moved && guard++ < 50) {
+      moved = false;
+      const order = [...widgets].sort(
+        (a, b) => a.position.y - b.position.y || widgets.indexOf(a) - widgets.indexOf(b)
+      );
+      for (let i = 0; i < order.length; i++) {
+        const a = order[i];
+        let pushTo = a.position.y;
+        for (let j = 0; j < i; j++) {
+          const b = order[j];
+          if (b.position.x >= a.position.x + a.width ||
+              b.position.x + b.width <= a.position.x) continue;
+          pushTo = Math.max(pushTo, b.position.y + this.#effH(b));
+        }
+        if (pushTo > a.position.y) { a.position.y = pushTo; moved = true; }
       }
     }
-    if (!changed) return;
-    const packed = packBoxes(widgets.map((w) => ({
-      id: w.id, x: w.position.x, y: w.position.y, w: w.width, h: this.#effH(w),
-    })));
-    for (const w of widgets) w.position = packed.get(w.id) ?? w.position;
   }
 
   /**
-   * Commit a move: clamp into the grid, then bump overlapping widgets out of
-   * the way.
+   * Release magnet: columns quantise to whole cells, but vertical releases
+   * are fractional. Flush-under / flush-over neighbours are preferred when
+   * one is within SNAP_TOLERANCE of the release (so dropping a card "just
+   * under" a neighbour always snugs, never rounds a full row away); the
+   * whole-row line is the fallback that keeps the grid feel in open space.
+   */
+  #snapY(widgets, target) {
+    const raw = target.position.y;
+    const th = this.#effH(target);
+    const xHits = (w) => w !== target &&
+      w.position.x < target.position.x + target.width &&
+      w.position.x + w.width > target.position.x;
+    const overlapsAt = (yy) => widgets.some((w) => xHits(w) &&
+      yy < w.position.y + this.#effH(w) && yy + th > w.position.y);
+    const land = (c) => Math.abs(c - raw) <= SNAP_TOLERANCE && !overlapsAt(c);
+
+    const flush = [];
+    for (const w of widgets) {
+      if (!xHits(w)) continue;
+      flush.push(w.position.y + this.#effH(w)); // flush under
+      const above = w.position.y - th; // flush over
+      if (above >= 0) flush.push(above);
+    }
+    flush.sort((a, b) => Math.abs(a - raw) - Math.abs(b - raw));
+    if (flush.length && Math.abs(flush[0] - raw) <= SNAP_TOLERANCE) {
+      const snug = flush.find(land);
+      if (snug !== undefined) return snug;
+    }
+    const row = Math.round(raw);
+    if (Math.abs(row - raw) <= SNAP_TOLERANCE && !overlapsAt(row)) return row;
+    return raw;
+  }
+
+  /**
+   * Persist the given widget list, syncing each auto-fit card's fractional
+   * rendered height into its record so a cold boot (no DOM yet) can pack the
+   * same picture.
+   */
+  #commit(widgets) {
+    for (const w of widgets) {
+      if (w.autoHeight !== false && this.cards.has(w.id)) {
+        w.height = this.#effH(w);
+      }
+    }
+    this.section.overwrite({ ...this.layout, widgets });
+  }
+
+  /**
+   * Batched (one per frame) re-settle when a rendered card changes size —
+   * e.g. a Notes card growing while typing pushes the cards below it down.
+   */
+  #settleContent() {
+    if (this.#gravityFrame) return;
+    this.#gravityFrame = requestAnimationFrame(() => {
+      this.#gravityFrame = null;
+      if (document.querySelector('.widget--dragging, .widget--resizing')) return;
+      const widgets = this.layout.widgets;
+      if (!widgets.length) return;
+      const snapshot = (list) => list.map((w) => `${w.id}:${w.position.y}:${w.height}`).join('|');
+      const next = deepClone(widgets);
+      this.#settle(next);
+      if (snapshot(next) !== snapshot(widgets)) this.#commit(next);
+    });
+  }
+
+  /**
+   * Commit a move: clamp into the grid, magnet onto a snug landing if the
+   * release was within tolerance of one, then push anything now overlapped
+   * straight down. Whole-row drops stay whole-row in open space; drops near
+   * a neighbour land pixel-flush against it instead of jumping a full row.
    */
   moveWidget(id, x, y, { commit = true } = {}) {
     const widgets = deepClone(this.layout.widgets);
@@ -206,9 +298,10 @@ export class GridLayout {
 
     target.position.x = Math.min(Math.max(0, x), MAX_COLUMNS - clampW(target.width));
     target.position.y = Math.max(0, y);
-    this.#bumpOverlaps(widgets, id);
+    if (commit) target.position.y = this.#snapY(widgets, target);
+    this.#settle(widgets);
 
-    if (commit) this.section.overwrite({ ...this.layout, widgets });
+    if (commit) this.#commit(widgets);
     return target.position;
   }
 
@@ -222,8 +315,8 @@ export class GridLayout {
     const target = widgets.find((w) => w.id === id);
     if (!target) return;
     target.width = clampW(target.width + delta);
-    this.#bumpOverlaps(widgets, id);
-    if (commit) this.section.overwrite({ ...this.layout, widgets });
+    this.#settle(widgets);
+    if (commit) this.#commit(widgets);
   }
 
   /** Set a widget's height in rows and stop auto-sizing it. */
@@ -245,8 +338,8 @@ export class GridLayout {
       ) return; // not satisfiable — keep current state
     }
     target.autoHeight = false;
-    this.#bumpOverlaps(widgets, id);
-    if (commit) this.section.overwrite({ ...this.layout, widgets });
+    this.#settle(widgets);
+    if (commit) this.#commit(widgets);
   }
 
   /** Return a widget to content-snug auto sizing. */
@@ -255,7 +348,8 @@ export class GridLayout {
     const target = widgets.find((w) => w.id === id);
     if (!target || target.autoHeight !== false) return;
     target.autoHeight = true;
-    if (commit) this.section.overwrite({ ...this.layout, widgets });
+    this.#settle(widgets);
+    if (commit) this.#commit(widgets);
   }
 
   /** Add a widget record at the first free spot. Returns the stored record. */
@@ -270,7 +364,7 @@ export class GridLayout {
     const position = packed.get(record.id);
     const entry = { ...record, position };
     widgets.push(entry);
-    if (commit) this.section.overwrite({ ...this.layout, widgets });
+    if (commit) this.#commit(widgets);
     return entry;
   }
 

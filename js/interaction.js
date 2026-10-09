@@ -65,13 +65,15 @@ export function makeInteractive({ card, getItem, grid, manager }) {
       card.classList.remove('widget--dragging');
 
       const rootRect = grid.root.getBoundingClientRect();
-      // where should the card's top-left land?
+      // x quantises to whole columns; y stays FRACTIONAL so the release
+      // magnet in moveWidget can land the card flush against a neighbour
+      // instead of being pre-rounded to a whole row.
       const x = Math.round(
         (ev.clientX - grabOffsetX - rootRect.left - grid.padding) / (grid.cellW + grid.gap)
       );
-      const y = Math.max(0, Math.round(
+      const y = Math.max(0,
         (ev.clientY - grabOffsetY - rootRect.top - grid.padding) / (grid.cellHeight + grid.gap)
-      ));
+      );
       grid.moveWidget(id, x, y);
     };
 
